@@ -34,11 +34,11 @@ def load_config():
 
     cookie = os.getenv("OVERLEAF_COOKIE") or config.get("cookie")
     if not cookie:
-        raise ValueError("Cookie не указан ни в .env, ни в config.json")
+        raise ValueError("Cookie not specified in .env or config.json")
 
     projects = config.get("projects", [])
     if not projects:
-        raise ValueError("Список проектов пуст или отсутствует в config.json")
+        raise ValueError("Project list is empty or missing in config.json")
 
     return cookie, projects
 
@@ -50,7 +50,7 @@ def ensure_progress_file():
         initial_progress = {proj["name"]: 0 for proj in config.get("projects", [])}
         with open(PROGRESS_FILE, "w", encoding="utf-8") as f:
             json.dump(initial_progress, f, indent=2)
-        logging.info("Создан новый файл прогресса progress.json")
+        logging.info("Created new progress file progress.json")
 
 
 def load_progress():
@@ -125,12 +125,12 @@ def safe_click(driver, element, max_retries=5, scroll=True):
         except selenium.common.exceptions.StaleElementReferenceException:
             time.sleep(0.5)
         except Exception as e:
-            logging.warning(f"❌ Ошибка при попытке клика: {e}")
+            logging.warning(f"Click attempt failed: {e}")
             time.sleep(0.5)
     try:
         driver.execute_script("arguments[0].click();", element)
     except Exception as e:
-        raise Exception("❌ Не удалось кликнуть по элементу ни обычным, ни js способом") from e
+        raise Exception("Failed to click the element using both normal and JS method") from e
 
 
 def download_version(driver, version_el, project_name, version_num):
@@ -151,16 +151,16 @@ def download_version(driver, version_el, project_name, version_num):
         """, download_url)
 
         if not content:
-            raise Exception("Пустой контент из fetch")
+            raise Exception("Empty content from fetch")
 
-        # Сохранить как zip
+        # Save as zip
         with open(f"{OUTPUT_DIR}/{project_name}_v{version_num}.zip", "wb") as f:
             f.write(bytearray(content))
 
         return True
 
     except Exception as e:
-        logging.warning(f"Ошибка при скачивании версии {version_num} проекта {project_name}: {e}")
+        logging.warning(f"Error downloading version {version_num} of project {project_name}: {e}")
         raise
 
 
@@ -168,7 +168,7 @@ def run_for_project(project, progress, cookie):
     name = project['name']
     url = project['url']
     logger = setup_logger(name)
-    logger.info(f"== Запуск проекта {name} ==")
+    logger.info(f"== Starting project {name} ==")
 
     backoff = 60
     done = False
@@ -181,36 +181,36 @@ def run_for_project(project, progress, cookie):
             wait_and_click(driver, By.XPATH, '//span[text()="history"]/ancestor::button')
 
             version_elements = extract_version_links(driver)
-            logger.info(f"Найдено {len(version_elements)} версий")
+            logger.info(f"Found {len(version_elements)} versions")
 
             last = progress.get(name, -1)
             for i in range(last + 1, len(version_elements)-1):
-                logger.info(f"Обрабатываем версию {i}...")
+                logger.info(f"Processing version {i}...")
                 try:
                     download_version(driver, version_elements[i], name, i)
                     progress[name] = i
                     save_progress(progress)
                 except (StaleElementReferenceException, ElementClickInterceptedException) as e:
-                    logger.warning(f"Проблема с DOM: {e}. Повторный запуск")
-                    break  # пересоздаем драйвер на следующем проходе
+                    logger.warning(f"DOM issue: {e}. Restarting")
+                    break  # recreate driver in next run
                 except WebDriverException as e:
                     if '429' in str(e):
-                        logger.warning(f"Лимит превышен, ждем {backoff} секунд")
+                        logger.warning(f"Rate limit hit, sleeping for {backoff} seconds")
                         time.sleep(backoff)
                         backoff = min(backoff * 2, MAX_BACKOFF_SECONDS)
                         break
                     else:
-                        logger.error(f"Ошибка при обработке версии {i}: {e}")
+                        logger.error(f"Error processing version {i}: {e}")
                         logger.error(traceback.format_exc())
                 except Exception as e:
-                    logger.error(f"❌ Ошибка при обработке версии {i}: {e}")
+                    logger.error(f"❌ Error processing version {i}: {e}")
                     logger.error(traceback.format_exc())
             else:
                 done = True
 
             driver.quit()
         except Exception as e:
-            logger.error(f"Общая ошибка: {e}")
+            logger.error(f"General error: {e}")
             logger.error(traceback.format_exc())
             time.sleep(backoff)
             backoff = min(backoff * 2, MAX_BACKOFF_SECONDS)
@@ -231,4 +231,4 @@ if __name__ == '__main__':
     for project in projects:
         run_for_project(project, progress, cookie)
 
-    print("✅ Все проекты завершены")
+    print("✅ All projects completed")
