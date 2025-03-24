@@ -1,0 +1,15 @@
+version: "3.9"
+services:
+  overleaf-downloader:
+    build: .
+    container_name: overleaf-downloader
+    volumes:
+      - ./config.json:/app/config.json:ro
+      - ./shared:/app/shared
+      - ./shared/logs:/app/logs
+      - ./downloads:/app/downloads
+    env_file:
+      - .env
+    environment:
+      - TZ=Europe/Moscow
+    restart: unless-stopped
